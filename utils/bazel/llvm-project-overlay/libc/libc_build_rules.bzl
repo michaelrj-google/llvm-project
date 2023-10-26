@@ -5,28 +5,33 @@
 """LLVM libc starlark rules for building individual functions."""
 
 load("@bazel_skylib//lib:selects.bzl", "selects")
+load(":libc_namespace.bzl", "LIBC_NAMESPACE")
 load(":platforms.bzl", "PLATFORM_CPU_ARM64", "PLATFORM_CPU_X86_64")
 
 LIBC_ROOT_TARGET = ":libc_root"
 INTERNAL_SUFFIX = ".__internal__"
 
-def _libc_library(name, copts = None, **kwargs):
+def _libc_library(name, copts = None, local_defines = None, **kwargs):
     """Internal macro to serve as a base for all other libc library rules.
 
     Args:
       name: Target name.
       copts: The special compiler options for the target.
+      local_defines: Defines that only apply to this target.
       **kwargs: All other attributes relevant for the cc_library rule.
     """
     copts = copts or []
+    local_defines = local_defines or []
 
     # We want all libc sources to be compiled with "hidden" visibility.
     # The public symbols will be given "default" visibility explicitly.
     # See src/__support/common.h for more information.
     copts = copts + ["-fvisibility=hidden"]
+    local_defines = local_defines + ["LIBC_NAMESPACE=" + LIBC_NAMESPACE]
     native.cc_library(
         name = name,
         copts = copts,
+        local_defines = local_defines,
         linkstatic = 1,
         **kwargs
     )
@@ -80,6 +85,7 @@ def libc_function(
         srcs = srcs,
         deps = deps,
         copts = copts,
+        local_defines = ["LIBC_NAMESPACE=" + LIBC_NAMESPACE],
         linkstatic = 1,
         **kwargs
     )
