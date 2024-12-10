@@ -41,7 +41,7 @@ libc_test(
     libc_function_deps = [
         "//libc:memchr",
     ],
-)
+) 
 
 libc_support_library(
     name = "strchr_test_helper",
