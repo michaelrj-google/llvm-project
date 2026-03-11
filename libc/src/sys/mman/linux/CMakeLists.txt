@@ -295,6 +295,7 @@ add_entrypoint_object(
   DEPENDS
     libc.hdr.types.mode_t
     libc.src.errno.errno
+    libc.src.__support.OSUtil.linux.syscall_wrappers.open
     .shm_common
 )
 
