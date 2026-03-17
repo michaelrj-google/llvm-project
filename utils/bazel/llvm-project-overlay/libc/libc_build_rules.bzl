@@ -255,7 +255,7 @@ def libc_header_library(name, hdrs, deps = [], **kwargs):
         enforce_headers_only = True,
     )
 
-def libc_generated_header(name, hdr, yaml_template, other_srcs = []):
+def libc_generated_header(name, hdr, yaml_template, other_srcs = [], proxy = False):
     """Generates a libc header file from YAML template.
 
     Args:
@@ -263,12 +263,13 @@ def libc_generated_header(name, hdr, yaml_template, other_srcs = []):
       hdr: Path of the header file to generate.
       yaml_template: Path of the YAML template file.
       other_srcs: Other files required to generate the header, if any.
+      proxy: Whether this is a proxy header with slightly different generation results.
     """
     hdrgen = "//libc:hdrgen"
     cmd = "$(location {hdrgen}) $(location {yaml}) -o $@".format(
         hdrgen = hdrgen,
         yaml = yaml_template,
-    )
+    ) + ( " --proxy" if proxy else "")
 
     if not hdr.startswith("staging/"):
         fail(
