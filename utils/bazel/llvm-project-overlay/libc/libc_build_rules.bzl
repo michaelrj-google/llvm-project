@@ -269,7 +269,7 @@ def libc_generated_header(name, hdr, yaml_template, other_srcs = [], proxy = Fal
     cmd = "$(location {hdrgen}) $(location {yaml}) -o $@".format(
         hdrgen = hdrgen,
         yaml = yaml_template,
-    ) + ( " --proxy" if proxy else "")
+    ) + (" --proxy" if proxy else "")
 
     if not hdr.startswith("staging/"):
         fail(
