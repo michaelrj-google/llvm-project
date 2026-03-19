@@ -9,9 +9,9 @@ load("@rules_cc//cc:defs.bzl", "cc_library")
 load("@rules_python//python:defs.bzl", "py_binary")
 load(
     ":libc_build_rules.bzl",
-    "libc_copy_header",
     "libc_function",
     "libc_generated_header",
+    "libc_header_info",
     "libc_header_library",
     "libc_math_function",
     "libc_support_library",
@@ -95,113 +95,140 @@ py_binary(
     deps = ["@pyyaml//:yaml"],
 )
 
-# the list of simple headers that only have name, hdr, other_srcs and
-# yaml_template. They also follow the pattern that the generated header is in
-# staging/include/<header>.h and the yaml template is in include/<header>.yaml.
-gen_headers_with_templates = [
-    "arpa/inet",
-    "assert",
-    "complex",
-    "elf",
-    "endian",
-    "errno",
-    "fcntl",
-    "features",
-    "float",
-    "inttypes",
-    "limits",
-    "link",
-    "locale",
-    "math",
-    "netinet/in",
-    "poll",
-    "sched",
-    "signal",
-    "stdbit",
-    "stdckdint",
-    "stdfix",
-    "stdint",
-    "stdio",
-    "sysexits",
-    "sys/auxv",
-    "sys/epoll",
-    "sys/ioctl",
-    "sys/mman",
-    "sys/prctl",
-    "sys/random",
-    "sys/resource",
-    "sys/select",
-    "sys/socket",
-    "sys/stat",
-    "sys/syscall",
-    "sys/time",
-    "sys/types",
-    "sys/wait",
-    "termios",
-    "time",
-    "unistd",
-    "wchar",
-]
-
-# same as above but they don't have a .h.def file listed.
-gen_headers_with_no_h_def = [
-    "ctype",
-    "dirent",
-    "dlfcn",
-    "fenv",
-    "nl_types",
-    "pthread",
-    "search",
-    "setjmp",
-    "spawn",
-    "string",
-    "strings",
-    "sys/ipc",
-    "sys/statvfs",
-    "sys/utsname",
-    "threads",
-    "uchar",
-    "wctype",
+LLVM_LIBC_HEADERS = [
+    libc_header_info("arpa/inet"),
+    libc_header_info("assert"),
+    libc_header_info("complex"),
+    libc_header_info("elf"),
+    libc_header_info("endian"),
+    libc_header_info("errno"),
+    libc_header_info("fcntl"),
+    libc_header_info("features"),
+    libc_header_info("float"),
+    libc_header_info("inttypes"),
+    libc_header_info("limits"),
+    libc_header_info("link"),
+    libc_header_info("locale"),
+    libc_header_info("math"),
+    libc_header_info("netinet/in"),
+    libc_header_info("poll"),
+    libc_header_info("sched"),
+    libc_header_info("signal"),
+    libc_header_info("stdbit"),
+    libc_header_info("stdckdint"),
+    libc_header_info("stdfix"),
+    libc_header_info("stdint"),
+    libc_header_info("stdio"),
+    libc_header_info("sysexits"),
+    libc_header_info("sys/auxv"),
+    libc_header_info("sys/epoll"),
+    libc_header_info("sys/ioctl"),
+    libc_header_info("sys/mman"),
+    libc_header_info("sys/prctl"),
+    libc_header_info("sys/random"),
+    libc_header_info("sys/resource"),
+    libc_header_info("sys/select"),
+    libc_header_info("sys/socket"),
+    libc_header_info("sys/stat"),
+    libc_header_info("sys/syscall"),
+    libc_header_info("sys/time"),
+    libc_header_info("sys/types"),
+    libc_header_info("sys/wait"),
+    libc_header_info("termios"),
+    libc_header_info("time"),
+    libc_header_info("unistd"),
+    libc_header_info("wchar"),
+    libc_header_info(
+        "ctype",
+        has_def_template = False,
+    ),
+    libc_header_info(
+        "dirent",
+        has_def_template = False,
+    ),
+    libc_header_info(
+        "dlfcn",
+        has_def_template = False,
+    ),
+    libc_header_info(
+        "fenv",
+        has_def_template = False,
+    ),
+    libc_header_info(
+        "nl_types",
+        has_def_template = False,
+    ),
+    libc_header_info(
+        "pthread",
+        has_def_template = False,
+    ),
+    libc_header_info(
+        "search",
+        has_def_template = False,
+    ),
+    libc_header_info(
+        "setjmp",
+        has_def_template = False,
+    ),
+    libc_header_info(
+        "spawn",
+        has_def_template = False,
+    ),
+    libc_header_info(
+        "string",
+        has_def_template = False,
+    ),
+    libc_header_info(
+        "strings",
+        has_def_template = False,
+    ),
+    libc_header_info(
+        "sys/ipc",
+        has_def_template = False,
+    ),
+    libc_header_info(
+        "sys/statvfs",
+        has_def_template = False,
+    ),
+    libc_header_info(
+        "sys/utsname",
+        has_def_template = False,
+    ),
+    libc_header_info(
+        "threads",
+        has_def_template = False,
+    ),
+    libc_header_info(
+        "uchar",
+        has_def_template = False,
+    ),
+    libc_header_info(
+        "wctype",
+        has_def_template = False,
+    ),
+    libc_header_info(
+        "stdlib",
+        has_def_template = True,
+        other_srcs = ["include/stdlib-malloc.yaml"],
+    ),
+    libc_header_info(
+        "malloc",
+        has_def_template = False,
+        other_srcs = ["include/stdlib-malloc.yaml"],
+    ),
 ]
 
 [
     libc_generated_header(
-        name = "include_{}_h".format(header.replace("/", "_")),
-        hdr = "staging/include/{}.h".format(header),
-        other_srcs = ["include/{}.h.def".format(header)],
-        yaml_template = "include/{}.yaml".format(header),
+        name = info.target_name,
+        hdr = info.staging_path,
+        other_srcs = info.other_srcs,
+        yaml_template = info.yaml_template,
     )
-    for header in gen_headers_with_templates
+    for info in LLVM_LIBC_HEADERS
 ]
 
-[
-    libc_generated_header(
-        name = "include_{}_h".format(header.replace("/", "_")),
-        hdr = "staging/include/{}.h".format(header),
-        yaml_template = "include/{}.yaml".format(header),
-    )
-    for header in gen_headers_with_no_h_def
-]
-
-# headers which don't fit the standard patterns.
-libc_generated_header(
-    name = "include_stdlib_h",
-    hdr = "staging/include/stdlib.h",
-    other_srcs = [
-        "include/stdlib.h.def",
-        "include/stdlib-malloc.yaml",
-    ],
-    yaml_template = "include/stdlib.yaml",
-)
-
-libc_generated_header(
-    name = "include_malloc_h",
-    hdr = "staging/include/malloc.h",
-    other_srcs = ["include/stdlib-malloc.yaml"],
-    yaml_template = "include/malloc.yaml",
-)
-
-# needed for startup and VDSO
+# needed for startup and VDSO. Doesn't get placed in /include so is handled separately.
 libc_generated_header(
     name = "hdr_elf_proxy_h",
     hdr = "staging/hdr/elf_proxy.h",
@@ -216,27 +243,14 @@ genrule(
     name = "copy_llvm_libc_static_headers",
     srcs = STATIC_HEADERS,
     outs = ["staging/include/" + f.replace("include/", "") for f in STATIC_HEADERS],
-    cmd = " && ".join([
-        "cp $(location %s) $(location %s)" % (
-            src,
-            "staging/include/" + src.replace("include/", ""),
-        )
-        for src in STATIC_HEADERS
-    ]),
+    cmd = """srcs=($(SRCS))\n outs=($(OUTS))\n for i in "$${!srcs[@]}"; do cp "$${srcs[$$i]}" "$${outs[$$i]}"; done""",
 )
 
 cc_library(
     name = "public_headers",
-    hdrs = [
-        ":copy_llvm_libc_static_headers",
-        ":include_malloc_h",
-        ":include_stdlib_h",
-    ] + [
-        ":include_{}_h".format(header.replace("/", "_"))
-        for header in gen_headers_with_templates + gen_headers_with_no_h_def
-    ],
-    features = ["-parse_headers"],  # Needed due to stdbit-macros.h.
+    hdrs = [header.target_name for header in LLVM_LIBC_HEADERS],
     includes = ["staging/include"],
+    textual_hdrs = STATIC_HEADERS,
 )
 
 # Textual versions of the static headers. These are taken from the source tree

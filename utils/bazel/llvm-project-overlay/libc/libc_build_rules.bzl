@@ -286,22 +286,15 @@ def libc_generated_header(name, hdr, yaml_template, other_srcs = [], proxy = Fal
         tools = [hdrgen],
     )
 
-def libc_copy_header(name, src, out):
-    """Copies a header file to the staging directory.
-
-    Args:
-      name: Name of the target.
-      src: Path of the source header file.
-      out: Path of the output header file (relative to staging/include/).
-    """
-    if not out.startswith("staging/include/"):
-        fail("Output header must be in staging/include/")
-
-    native.genrule(
-        name = name,
-        srcs = [src],
-        outs = [out],
-        cmd = "cp $< $@",
+def libc_header_info(
+        name,
+        has_def_template = True,
+        other_srcs = []):
+    return struct(
+        target_name = "include_{}_h".format(name.replace("/", "_")),
+        staging_path = "staging/include/{}.h".format(name),
+        yaml_template = "include/{}.yaml".format(name),
+        other_srcs = other_srcs + (["include/{}.h.def".format(name)] if has_def_template else []),
     )
 
 def libc_math_function(
