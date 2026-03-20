@@ -138,74 +138,23 @@ LLVM_LIBC_HEADERS = [
     libc_header_info("time"),
     libc_header_info("unistd"),
     libc_header_info("wchar"),
-    libc_header_info(
-        "ctype",
-        has_def_template = False,
-    ),
-    libc_header_info(
-        "dirent",
-        has_def_template = False,
-    ),
-    libc_header_info(
-        "dlfcn",
-        has_def_template = False,
-    ),
-    libc_header_info(
-        "fenv",
-        has_def_template = False,
-    ),
-    libc_header_info(
-        "nl_types",
-        has_def_template = False,
-    ),
-    libc_header_info(
-        "pthread",
-        has_def_template = False,
-    ),
-    libc_header_info(
-        "search",
-        has_def_template = False,
-    ),
-    libc_header_info(
-        "setjmp",
-        has_def_template = False,
-    ),
-    libc_header_info(
-        "spawn",
-        has_def_template = False,
-    ),
-    libc_header_info(
-        "string",
-        has_def_template = False,
-    ),
-    libc_header_info(
-        "strings",
-        has_def_template = False,
-    ),
-    libc_header_info(
-        "sys/ipc",
-        has_def_template = False,
-    ),
-    libc_header_info(
-        "sys/statvfs",
-        has_def_template = False,
-    ),
-    libc_header_info(
-        "sys/utsname",
-        has_def_template = False,
-    ),
-    libc_header_info(
-        "threads",
-        has_def_template = False,
-    ),
-    libc_header_info(
-        "uchar",
-        has_def_template = False,
-    ),
-    libc_header_info(
-        "wctype",
-        has_def_template = False,
-    ),
+    libc_header_info("ctype", False),
+    libc_header_info("dirent", False),
+    libc_header_info("dlfcn", False),
+    libc_header_info("fenv", False),
+    libc_header_info("nl_types", False),
+    libc_header_info("pthread", False),
+    libc_header_info("search", False),
+    libc_header_info("setjmp", False),
+    libc_header_info("spawn", False),
+    libc_header_info("string", False),
+    libc_header_info("strings", False),
+    libc_header_info("sys/ipc", False),
+    libc_header_info("sys/statvfs", False),
+    libc_header_info("sys/utsname", False),
+    libc_header_info("threads", False),
+    libc_header_info("uchar", False),
+    libc_header_info("wctype", False),
     libc_header_info(
         "stdlib",
         has_def_template = True,
@@ -242,7 +191,7 @@ STATIC_HEADERS = glob(["include/llvm-libc-types/**/*.h"]) + glob(["include/llvm-
 genrule(
     name = "copy_llvm_libc_static_headers",
     srcs = STATIC_HEADERS,
-    outs = ["staging/include/" + f.replace("include/", "") for f in STATIC_HEADERS],
+    outs = ["staging/" + f for f in STATIC_HEADERS],
     cmd = """srcs=($(SRCS))\n outs=($(OUTS))\n for i in "$${!srcs[@]}"; do cp "$${srcs[$$i]}" "$${outs[$$i]}"; done""",
 )
 
@@ -250,7 +199,8 @@ cc_library(
     name = "public_headers",
     hdrs = [header.target_name for header in LLVM_LIBC_HEADERS],
     includes = ["staging/include"],
-    textual_hdrs = STATIC_HEADERS,
+    textual_hdrs = ["staging/" + f for f in STATIC_HEADERS],
+    deps = [":copy_llvm_libc_static_headers"],
 )
 
 # Textual versions of the static headers. These are taken from the source tree
