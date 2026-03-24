@@ -288,7 +288,7 @@ def libc_generated_header(name, hdr, yaml_template, other_srcs = [], proxy = Fal
 
 def libc_header_info(
         name,
-        has_def_template = True,
+        has_def_template = False,
         other_srcs = []):
     return struct(
         target_name = "include_{}_h".format(name.replace("/", "_")),
