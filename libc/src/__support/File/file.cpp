@@ -11,11 +11,14 @@
 #include "hdr/func/realloc.h"
 #include "hdr/stdio_macros.h"
 #include "hdr/types/off_t.h"
+#include "hdr/wchar_macros.h"
 #include "src/__support/CPP/new.h"
 #include "src/__support/CPP/span.h"
 #include "src/__support/alloc-checker.h"
 #include "src/__support/libc_errno.h" // For error macros
 #include "src/__support/macros/config.h"
+#include "src/__support/wchar/mbrtowc.h"
+#include "src/__support/wchar/wcrtomb.h"
 #include "src/string/memory_utils/inline_memcpy.h"
 
 namespace LIBC_NAMESPACE_DECL {
@@ -53,6 +56,13 @@ void File::lock_list() { File::list_lock.lock(); }
 void File::unlock_list() { File::list_lock.unlock(); }
 
 FileIOResult File::write_unlocked(const void *data, size_t len) {
+  if (orientation == Orientation::WIDE) {
+    err = true;
+    return {0, EINVAL};
+  }
+  if (orientation == Orientation::UNORIENTED)
+    orientation = Orientation::BYTE;
+
   if (!write_allowed()) {
     err = true;
     return {0, EBADF};
@@ -214,6 +224,13 @@ FileIOResult File::write_unlocked_lbf(const uint8_t *data, size_t len) {
 }
 
 FileIOResult File::read_unlocked(void *data, size_t len) {
+  if (orientation == Orientation::WIDE) {
+    err = true;
+    return {0, EINVAL};
+  }
+  if (orientation == Orientation::UNORIENTED)
+    orientation = Orientation::BYTE;
+
   if (!read_allowed()) {
     err = true;
     return {0, EBADF};
@@ -315,6 +332,13 @@ FileIOResult File::read_unlocked_nbf(uint8_t *data, size_t len) {
 }
 
 int File::ungetc_unlocked(int c) {
+  if (orientation == Orientation::WIDE) {
+    err = true;
+    return EOF;
+  }
+  if (orientation == Orientation::UNORIENTED)
+    orientation = Orientation::BYTE;
+
   // There is no meaning to unget if:
   // 1. You are trying to push back EOF.
   // 2. Read operations are not allowed on this file.
@@ -507,6 +531,131 @@ File::ModeFlags File::mode_flags(const char *mode) {
     return 0;
 
   return flags;
+}
+
+FileIOResult File::write_wide_character_unlocked(wchar_t wc) {
+  if (orientation == Orientation::UNORIENTED)
+    orientation = Orientation::WIDE;
+  if (orientation != Orientation::WIDE) {
+    err = true;
+    return {0, EINVAL};
+  }
+
+  if (!write_allowed()) {
+    err = true;
+    return {0, EBADF};
+  }
+
+  prev_op = FileOp::WRITE;
+
+  char buf[4];
+  auto result = internal::wcrtomb(buf, wc, &shift_state);
+  if (!result.has_value()) {
+    err = true;
+    return {0, result.error()};
+  }
+
+  size_t n = result.value();
+  if (bufmode == _IONBF) {
+    size_t ret_val =
+        write_unlocked_nbf(reinterpret_cast<const uint8_t *>(buf), n);
+    flush_unlocked();
+    return ret_val;
+  } else if (bufmode == _IOFBF) {
+    return write_unlocked_fbf(reinterpret_cast<const uint8_t *>(buf), n);
+  } else {
+    return write_unlocked_lbf(reinterpret_cast<const uint8_t *>(buf), n);
+  }
+}
+
+ErrorOr<wchar_t> File::read_wide_character_unlocked() {
+  if (orientation == Orientation::UNORIENTED)
+    orientation = Orientation::WIDE;
+  if (orientation != Orientation::WIDE) {
+    err = true;
+    return Error(EINVAL);
+  }
+
+  if (!read_allowed()) {
+    err = true;
+    return Error(EBADF);
+  }
+
+  prev_op = FileOp::READ;
+
+  wchar_t wc;
+  bool first_byte = true;
+  while (true) {
+    uint8_t byte;
+    FileIOResult read_result{0};
+    if (bufmode == _IONBF) {
+      read_result = read_unlocked_nbf(&byte, 1);
+    } else {
+      read_result = read_unlocked_fbf(&byte, 1);
+    }
+    if (read_result.has_error()) {
+      err = true;
+      return Error(read_result.error);
+    }
+    if (read_result.value == 0) { // EOF
+      if (first_byte) {
+        return Error(0); // EOF
+      } else {
+        err = true;
+        return Error(EILSEQ); // Incomplete character at EOF
+      }
+    }
+    char c = static_cast<char>(byte);
+    auto res = internal::mbrtowc(&wc, &c, 1, &shift_state);
+    if (!res.has_value()) {
+      err = true;
+      return Error(res.error());
+    }
+    if (res.value() == 0) { // null terminator
+      return L'\0';
+    }
+    if (res.value() != static_cast<size_t>(-2)) { // Complete character
+      return wc;
+    }
+    first_byte = false;
+  }
+}
+
+wint_t File::ungetwc_unlocked(wchar_t wc) {
+  if (orientation == Orientation::UNORIENTED)
+    orientation = Orientation::WIDE;
+  if (orientation != Orientation::WIDE) {
+    err = true;
+    return WEOF;
+  }
+
+  char buf[4];
+  auto result = internal::wcrtomb(buf, wc, &shift_state);
+  if (!result.has_value()) {
+    err = true;
+    return WEOF;
+  }
+  size_t n = result.value();
+
+  if (read_limit == 0) {
+    for (size_t i = 0; i < n; ++i) {
+      this->buf[i] = static_cast<uint8_t>(buf[i]);
+    }
+    read_limit = n;
+    pos = 0;
+  } else {
+    if (pos < n) {
+      err = true;
+      return WEOF;
+    }
+    pos -= n;
+    for (size_t i = 0; i < n; ++i) {
+      this->buf[pos + i] = static_cast<uint8_t>(buf[i]);
+    }
+  }
+  eof = false;
+  err = false;
+  return wc;
 }
 
 } // namespace LIBC_NAMESPACE_DECL

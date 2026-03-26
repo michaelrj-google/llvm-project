@@ -20,6 +20,9 @@ add_object_library(
     libc.src.__support.CPP.span
     libc.src.__support.threads.mutex
     libc.src.__support.error_or
+    libc.src.__support.wchar.mbrtowc
+    libc.src.__support.wchar.mbstate
+    libc.src.__support.wchar.wcrtomb
 )
 
 add_object_library(

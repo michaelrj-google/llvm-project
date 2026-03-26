@@ -12,11 +12,14 @@
 #include "hdr/stdint_proxy.h"
 #include "hdr/stdio_macros.h"
 #include "hdr/types/off_t.h"
+#include "hdr/types/wchar_t.h"
+#include "hdr/types/wint_t.h"
 #include "src/__support/CPP/new.h"
 #include "src/__support/error_or.h"
 #include "src/__support/macros/config.h"
 #include "src/__support/macros/properties/architectures.h"
 #include "src/__support/threads/mutex.h"
+#include "src/__support/wchar/mbstate.h"
 
 #include <stddef.h>
 
@@ -51,6 +54,8 @@ public:
   File *get_next() const { return next; }
 
   static constexpr size_t DEFAULT_BUFFER_SIZE = 1024;
+
+  enum class Orientation { UNORIENTED, BYTE, WIDE };
 
   using LockFunc = void(File *);
   using UnlockFunc = void(File *);
@@ -131,6 +136,9 @@ private:
   bool eof;
   bool err;
 
+  Orientation orientation;
+  internal::mbstate shift_state;
+
   // This is a convenience RAII class to lock and unlock file objects.
   class FileLock {
     File *file;
@@ -172,7 +180,9 @@ public:
                                   /*robust=*/false, /*pshared=*/false),
         ungetc_buf(0), buf(buffer), bufsize(buffer_size), bufmode(buffer_mode),
         own_buf(owned), mode(modeflags), pos(0), prev_op(FileOp::NONE),
-        read_limit(0), eof(false), err(false), prev(nullptr), next(nullptr) {
+        read_limit(0), eof(false), err(false),
+        orientation(Orientation::UNORIENTED), shift_state(), prev(nullptr),
+        next(nullptr), {
     adjust_buf();
   }
 
@@ -213,6 +223,27 @@ public:
   int ungetc(int c) {
     FileLock lock(this);
     return ungetc_unlocked(c);
+  }
+
+  FileIOResult write_wide_character_unlocked(wchar_t wc);
+
+  FileIOResult write_wide_character(wchar_t wc) {
+    FileLock l(this);
+    return write_wide_character_unlocked(wc);
+  }
+
+  ErrorOr<wchar_t> read_wide_character_unlocked();
+
+  ErrorOr<wchar_t> read_wide_character() {
+    FileLock l(this);
+    return read_wide_character_unlocked();
+  }
+
+  wint_t ungetwc_unlocked(wchar_t wc);
+
+  wint_t ungetwc(wchar_t wc) {
+    FileLock lock(this);
+    return ungetwc_unlocked(wc);
   }
 
   // Does the following:
