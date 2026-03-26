@@ -137,7 +137,7 @@ private:
   bool err;
 
   Orientation orientation;
-  internal::mbstate shift_state;
+  internal::mbstate mbstate;
 
   // This is a convenience RAII class to lock and unlock file objects.
   class FileLock {
@@ -181,7 +181,7 @@ public:
         ungetc_buf(0), buf(buffer), bufsize(buffer_size), bufmode(buffer_mode),
         own_buf(owned), mode(modeflags), pos(0), prev_op(FileOp::NONE),
         read_limit(0), eof(false), err(false),
-        orientation(Orientation::UNORIENTED), shift_state(), prev(nullptr),
+        orientation(Orientation::UNORIENTED), mbstate(), prev(nullptr),
         next(nullptr), {
     adjust_buf();
   }
@@ -223,6 +223,20 @@ public:
   int ungetc(int c) {
     FileLock lock(this);
     return ungetc_unlocked(c);
+  }
+
+  FileIOResult write_unlocked(const wchar_t *ws, size_t len);
+
+  FileIOResult write(const wchar_t *ws, size_t len) {
+    FileLock l(this);
+    return write_unlocked(ws, len);
+  }
+
+  FileIOResult read_unlocked(wchar_t *ws, size_t len);
+
+  FileIOResult read(wchar_t *ws, size_t len) {
+    FileLock l(this);
+    return read_unlocked(ws, len);
   }
 
   FileIOResult write_wide_character_unlocked(wchar_t wc);
@@ -326,6 +340,9 @@ public:
   static ModeFlags mode_flags(const char *mode);
 
 private:
+  FileIOResult write_unlocked_impl(const void *data, size_t len);
+  FileIOResult read_unlocked_impl(void *data, size_t len);
+
   FileIOResult write_unlocked_lbf(const uint8_t *data, size_t len);
   FileIOResult write_unlocked_fbf(const uint8_t *data, size_t len);
   FileIOResult write_unlocked_nbf(const uint8_t *data, size_t len);

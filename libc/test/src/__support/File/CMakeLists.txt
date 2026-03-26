@@ -19,6 +19,7 @@ add_libc_test(
     libc.src.errno.errno
     libc.src.__support.CPP.new
     libc.src.__support.File.file
+    libc.src.__support.error_or
 )
 
 add_libc_test(

@@ -56,13 +56,20 @@ void File::lock_list() { File::list_lock.lock(); }
 void File::unlock_list() { File::list_lock.unlock(); }
 
 FileIOResult File::write_unlocked(const void *data, size_t len) {
-  if (orientation == Orientation::WIDE) {
+  switch (orientation) {
+  case Orientation::WIDE:
     err = true;
     return {0, EINVAL};
-  }
-  if (orientation == Orientation::UNORIENTED)
+  case Orientation::UNORIENTED:
     orientation = Orientation::BYTE;
+    break;
+  case Orientation::BYTE:
+    break;
+  }
+  return write_unlocked_impl(data, len);
+}
 
+FileIOResult File::write_unlocked_impl(const void *data, size_t len) {
   if (!write_allowed()) {
     err = true;
     return {0, EBADF};
@@ -75,9 +82,11 @@ FileIOResult File::write_unlocked(const void *data, size_t len) {
         write_unlocked_nbf(static_cast<const uint8_t *>(data), len);
     flush_unlocked();
     return ret_val;
-  } else if (bufmode == _IOFBF) { // fully buffered
+  }
+  if (bufmode == _IOFBF) { // fully buffered
     return write_unlocked_fbf(static_cast<const uint8_t *>(data), len);
-  } else /*if (bufmode == _IOLBF) */ { // line buffered
+  }
+  /*if (bufmode == _IOLBF) */ { // line buffered
     return write_unlocked_lbf(static_cast<const uint8_t *>(data), len);
   }
 }
@@ -224,13 +233,20 @@ FileIOResult File::write_unlocked_lbf(const uint8_t *data, size_t len) {
 }
 
 FileIOResult File::read_unlocked(void *data, size_t len) {
-  if (orientation == Orientation::WIDE) {
+  switch (orientation) {
+  case Orientation::WIDE:
     err = true;
     return {0, EINVAL};
-  }
-  if (orientation == Orientation::UNORIENTED)
+  case Orientation::UNORIENTED:
     orientation = Orientation::BYTE;
+    break;
+  case Orientation::BYTE:
+    break;
+  }
+  return read_unlocked_impl(data, len);
+}
 
+FileIOResult File::read_unlocked_impl(void *data, size_t len) {
   if (!read_allowed()) {
     err = true;
     return {0, EBADF};
@@ -240,9 +256,11 @@ FileIOResult File::read_unlocked(void *data, size_t len) {
 
   if (bufmode == _IONBF) { // unbuffered.
     return read_unlocked_nbf(static_cast<uint8_t *>(data), len);
-  } else if (bufmode == _IOFBF) { // fully buffered
+  }
+  if (bufmode == _IOFBF) { // fully buffered
     return read_unlocked_fbf(static_cast<uint8_t *>(data), len);
-  } else /*if (bufmode == _IOLBF) */ { // line buffered
+  }
+  /*if (bufmode == _IOLBF) */ { // line buffered
     // There is no line buffered mode for read. Use fully buffered instead.
     return read_unlocked_fbf(static_cast<uint8_t *>(data), len);
   }
@@ -533,66 +551,109 @@ File::ModeFlags File::mode_flags(const char *mode) {
   return flags;
 }
 
-FileIOResult File::write_wide_character_unlocked(wchar_t wc) {
-  if (orientation == Orientation::UNORIENTED)
-    orientation = Orientation::WIDE;
-  if (orientation != Orientation::WIDE) {
+FileIOResult File::write_unlocked(const wchar_t *ws, size_t len) {
+  switch (orientation) {
+  case Orientation::BYTE:
     err = true;
     return {0, EINVAL};
+  case Orientation::UNORIENTED:
+    orientation = Orientation::WIDE;
+    break;
+  case Orientation::WIDE:
+    break;
   }
 
-  if (!write_allowed()) {
+  size_t written = 0;
+  for (size_t i = 0; i < len; ++i) {
+    char buf[4];
+    auto result = internal::wcrtomb(buf, ws[i], &mbstate);
+    if (!result.has_value()) {
+      err = true;
+      return {written, result.error()};
+    }
+    size_t n = result.value();
+    auto write_res = write_unlocked_impl(buf, n);
+    if (write_res.has_error()) {
+      err = true;
+      return {written, write_res.error};
+    }
+    if (write_res.value < n) {
+      // Partial write of bytes.
+      return {written, 0};
+    }
+    ++written;
+  }
+  return {written, 0};
+}
+
+FileIOResult File::write_wide_character_unlocked(wchar_t wc) {
+  switch (orientation) {
+  case Orientation::BYTE:
     err = true;
-    return {0, EBADF};
+    return {0, EINVAL};
+  case Orientation::UNORIENTED:
+    orientation = Orientation::WIDE;
+    break;
+  case Orientation::WIDE:
+    break;
   }
-
-  prev_op = FileOp::WRITE;
 
   char buf[4];
-  auto result = internal::wcrtomb(buf, wc, &shift_state);
+  auto result = internal::wcrtomb(buf, wc, &mbstate);
   if (!result.has_value()) {
     err = true;
     return {0, result.error()};
   }
 
   size_t n = result.value();
-  if (bufmode == _IONBF) {
-    size_t ret_val =
-        write_unlocked_nbf(reinterpret_cast<const uint8_t *>(buf), n);
-    flush_unlocked();
-    return ret_val;
-  } else if (bufmode == _IOFBF) {
-    return write_unlocked_fbf(reinterpret_cast<const uint8_t *>(buf), n);
-  } else {
-    return write_unlocked_lbf(reinterpret_cast<const uint8_t *>(buf), n);
+  return write_unlocked_impl(buf, n);
+}
+
+FileIOResult File::read_unlocked(wchar_t *ws, size_t len) {
+  switch (orientation) {
+  case Orientation::BYTE:
+    err = true;
+    return {0, EINVAL};
+  case Orientation::UNORIENTED:
+    orientation = Orientation::WIDE;
+    break;
+  case Orientation::WIDE:
+    break;
   }
+
+  size_t read_count = 0;
+  for (size_t i = 0; i < len; ++i) {
+    auto res = read_wide_character_unlocked();
+    if (!res.has_value()) {
+      if (res.error() == 0) { // EOF
+        break;
+      }
+      err = true;
+      return {read_count, res.error()};
+    }
+    ws[i] = res.value();
+    ++read_count;
+  }
+  return {read_count, 0};
 }
 
 ErrorOr<wchar_t> File::read_wide_character_unlocked() {
-  if (orientation == Orientation::UNORIENTED)
-    orientation = Orientation::WIDE;
-  if (orientation != Orientation::WIDE) {
+  switch (orientation) {
+  case Orientation::BYTE:
     err = true;
     return Error(EINVAL);
+  case Orientation::UNORIENTED:
+    orientation = Orientation::WIDE;
+    break;
+  case Orientation::WIDE:
+    break;
   }
-
-  if (!read_allowed()) {
-    err = true;
-    return Error(EBADF);
-  }
-
-  prev_op = FileOp::READ;
 
   wchar_t wc;
   bool first_byte = true;
   while (true) {
     uint8_t byte;
-    FileIOResult read_result{0};
-    if (bufmode == _IONBF) {
-      read_result = read_unlocked_nbf(&byte, 1);
-    } else {
-      read_result = read_unlocked_fbf(&byte, 1);
-    }
+    FileIOResult read_result = read_unlocked_impl(&byte, 1);
     if (read_result.has_error()) {
       err = true;
       return Error(read_result.error);
@@ -600,13 +661,12 @@ ErrorOr<wchar_t> File::read_wide_character_unlocked() {
     if (read_result.value == 0) { // EOF
       if (first_byte) {
         return Error(0); // EOF
-      } else {
-        err = true;
-        return Error(EILSEQ); // Incomplete character at EOF
       }
+      err = true;
+      return Error(EILSEQ); // Incomplete character at EOF
     }
     char c = static_cast<char>(byte);
-    auto res = internal::mbrtowc(&wc, &c, 1, &shift_state);
+    auto res = internal::mbrtowc(&wc, &c, 1, &mbstate);
     if (!res.has_value()) {
       err = true;
       return Error(res.error());
@@ -630,7 +690,7 @@ wint_t File::ungetwc_unlocked(wchar_t wc) {
   }
 
   char buf[4];
-  auto result = internal::wcrtomb(buf, wc, &shift_state);
+  auto result = internal::wcrtomb(buf, wc, &mbstate);
   if (!result.has_value()) {
     err = true;
     return WEOF;

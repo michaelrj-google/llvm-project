@@ -600,3 +600,34 @@ TEST(LlvmLibcFileTest, Ungetwc) {
 
   ASSERT_EQ(f->close(), 0);
 }
+
+TEST(LlvmLibcFileTest, WideStringIO) {
+  constexpr size_t FILE_BUFFER_SIZE = 100;
+  char file_buffer[FILE_BUFFER_SIZE];
+  StringFile *f =
+      new_string_file(file_buffer, FILE_BUFFER_SIZE, _IOFBF, false, "w+");
+  ASSERT_FALSE(f == nullptr);
+
+  const wchar_t *ws = L"Hello, World!";
+  size_t len = 13;
+
+  auto write_res = f->write(ws, len);
+  ASSERT_FALSE(write_res.has_error());
+  EXPECT_EQ(write_res.value, len);
+
+  ASSERT_EQ(f->flush(), 0); // Ensure everything is written to StringFile
+
+  ASSERT_EQ(f->seek(0, SEEK_SET).value(), 0);
+
+  wchar_t read_buf[20];
+  auto read_res = f->read(read_buf, len);
+  ASSERT_FALSE(read_res.has_error());
+  EXPECT_EQ(read_res.value, len);
+
+  for (size_t i = 0; i < len; ++i) {
+    EXPECT_EQ(static_cast<unsigned int>(read_buf[i]),
+              static_cast<unsigned int>(ws[i]));
+  }
+
+  ASSERT_EQ(f->close(), 0);
+}
