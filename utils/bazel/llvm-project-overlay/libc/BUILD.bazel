@@ -85,6 +85,22 @@ config_setting(
     flag_values = {":mpc": "system"},
 )
 
+# A flag to enable modular format for printf.
+# Usage: `--@llvm-project//libc:modular_format=<disable|enable>`.
+string_flag(
+    name = "modular_format",
+    build_setting_default = "disable",
+    values = [
+        "disable",
+        "enable",
+    ],
+)
+
+config_setting(
+    name = "modular_format_enable",
+    flag_values = {":modular_format": "enable"},
+)
+
 ########################### Header Generation ##################################
 
 py_binary(
@@ -311,7 +327,15 @@ libc_generated_header(
 )
 
 # Static headers that need to be in staging/include
-STATIC_HEADERS = glob(["include/llvm-libc-types/**/*.h"]) + glob(["include/llvm-libc-macros/**/*.h"]) + ["include/__llvm-libc-common.h"]
+STATIC_HEADERS = glob(
+    ["include/llvm-libc-types/**/*.h"],
+) + glob(
+    ["include/llvm-libc-macros/**/*.h"],
+    exclude = [
+        "include/llvm-libc-macros/_LIBC_MODULAR_FORMAT_PRINTF.h",
+        "include/llvm-libc-macros/_LIBC_MODULAR_FORMAT_PRINTF-disable.h",
+    ],
+) + ["include/__llvm-libc-common.h"]
 
 genrule(
     name = "copy_llvm_libc_static_headers",
@@ -320,12 +344,27 @@ genrule(
     cmd = """srcs=($(SRCS))\n outs=($(OUTS))\n for i in "$${!srcs[@]}"; do cp "$${srcs[$$i]}" "$${outs[$$i]}"; done""",
 )
 
+genrule(
+    name = "copy_modular_format_header",
+    srcs = select({
+        ":modular_format_enable": ["include/llvm-libc-macros/_LIBC_MODULAR_FORMAT_PRINTF.h"],
+        "//conditions:default": ["include/llvm-libc-macros/_LIBC_MODULAR_FORMAT_PRINTF-disable.h"],
+    }),
+    outs = ["staging/include/llvm-libc-macros/_LIBC_MODULAR_FORMAT_PRINTF.h"],
+    cmd = "cp $< $@",
+)
+
+STATIC_AND_CONDITIONAL_HEADERS = STATIC_HEADERS + ["include/llvm-libc-macros/_LIBC_MODULAR_FORMAT_PRINTF.h"]
+
 cc_library(
     name = "public_headers",
     hdrs = [header.target_name for header in LLVM_LIBC_HEADERS],
     includes = ["staging/include"],
-    textual_hdrs = ["staging/" + f for f in STATIC_HEADERS],
-    deps = [":copy_llvm_libc_static_headers"],
+    textual_hdrs = ["staging/" + f for f in STATIC_AND_CONDITIONAL_HEADERS],
+    deps = [
+        ":copy_llvm_libc_static_headers",
+        ":copy_modular_format_header",
+    ],
 )
 
 # Textual versions of the static headers. These are taken from the source tree
@@ -333,7 +372,7 @@ cc_library(
 # testing purposes.
 libc_support_library(
     name = "public_headers_deps",
-    textual_hdrs = STATIC_HEADERS,
+    textual_hdrs = STATIC_AND_CONDITIONAL_HEADERS,
 )
 
 ################################## Base Config #################################
