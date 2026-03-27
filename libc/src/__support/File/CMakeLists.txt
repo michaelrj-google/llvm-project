@@ -18,6 +18,7 @@ add_object_library(
     libc.hdr.types.off_t
     libc.hdr.types.wchar_t
     libc.hdr.types.wint_t
+    libc.hdr.wchar_macros
     libc.src.__support.CPP.new
     libc.src.__support.CPP.span
     libc.src.__support.threads.mutex

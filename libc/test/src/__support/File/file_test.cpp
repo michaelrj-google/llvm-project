@@ -631,3 +631,29 @@ TEST(LlvmLibcFileTest, WideStringIO) {
 
   ASSERT_EQ(f->close(), 0);
 }
+
+TEST(LlvmLibcFileTest, TrySetOrientation) {
+  constexpr size_t FILE_BUFFER_SIZE = 100;
+  char file_buffer[FILE_BUFFER_SIZE];
+  StringFile *f =
+      new_string_file(file_buffer, FILE_BUFFER_SIZE, _IOFBF, false, "r+");
+  ASSERT_FALSE(f == nullptr);
+
+  EXPECT_EQ(static_cast<unsigned int>(f->get_orientation()),
+            static_cast<unsigned int>(File::Orientation::UNORIENTED));
+
+  EXPECT_EQ(static_cast<unsigned int>(
+                f->try_set_orientation(File::Orientation::WIDE)),
+            static_cast<unsigned int>(File::Orientation::WIDE));
+  EXPECT_EQ(static_cast<unsigned int>(f->get_orientation()),
+            static_cast<unsigned int>(File::Orientation::WIDE));
+
+  EXPECT_EQ(
+      static_cast<unsigned int>(
+          f->try_set_orientation(File::Orientation::BYTE)),
+      static_cast<unsigned int>(File::Orientation::WIDE)); // Cannot change
+  EXPECT_EQ(static_cast<unsigned int>(f->get_orientation()),
+            static_cast<unsigned int>(File::Orientation::WIDE));
+
+  ASSERT_EQ(f->close(), 0);
+}

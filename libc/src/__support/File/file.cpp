@@ -86,9 +86,8 @@ FileIOResult File::write_unlocked_impl(const void *data, size_t len) {
   if (bufmode == _IOFBF) { // fully buffered
     return write_unlocked_fbf(static_cast<const uint8_t *>(data), len);
   }
-  /*if (bufmode == _IOLBF) */ { // line buffered
-    return write_unlocked_lbf(static_cast<const uint8_t *>(data), len);
-  }
+  return write_unlocked_lbf(static_cast<const uint8_t *>(data),
+                            len); // line buffered
 }
 
 FileIOResult File::write_unlocked_nbf(const uint8_t *data, size_t len) {
@@ -280,9 +279,7 @@ size_t File::copy_data_from_buf(uint8_t *data, size_t len) {
   }
 
   // Copy all of the available data.
-  // TODO: Replace the for loop with a call to internal memcpy.
-  for (size_t i = 0; i < available_data; ++i)
-    dataref[i] = bufref[i + pos];
+  inline_memcpy(dataref.data(), bufref.data() + pos, available_data);
   read_limit = pos = 0; // Reset the pointers.
 
   return available_data;
@@ -409,14 +406,19 @@ ErrorOr<int> File::seek(off_t offset, int whence) {
     // function. Note that read_limit >= pos is always true.
     offset -= (read_limit - pos);
   }
-  pos = read_limit = 0;
-  prev_op = FileOp::SEEK;
-  // Reset the eof flag as a seek might move the file positon to some place
-  // readable.
-  eof = false;
   auto result = platform_seek(this, offset, whence);
   if (!result.has_value())
     return Error(result.error());
+
+  pos = read_limit = 0;
+  prev_op = FileOp::SEEK;
+  // Reset the eof flag as a seek might move the file position to some place
+  // readable.
+  eof = false;
+  if (orientation == Orientation::WIDE ||
+      orientation == Orientation::UNORIENTED)
+    mbstate = internal::mbstate();
+
   return 0;
 }
 

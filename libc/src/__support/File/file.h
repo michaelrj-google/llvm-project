@@ -335,6 +335,24 @@ public:
     return iseof_unlocked();
   }
 
+  Orientation get_orientation_unlocked() const { return orientation; }
+
+  Orientation get_orientation() {
+    FileLock l(this);
+    return get_orientation_unlocked();
+  }
+
+  Orientation try_set_orientation_unlocked(Orientation o) {
+    if (orientation == Orientation::UNORIENTED)
+      orientation = o;
+    return orientation;
+  }
+
+  Orientation try_set_orientation(Orientation o) {
+    FileLock l(this);
+    return try_set_orientation_unlocked(o);
+  }
+
   // Returns an bit map of flags corresponding to enumerations of
   // OpenMode, ContentType and CreateType.
   static ModeFlags mode_flags(const char *mode);
