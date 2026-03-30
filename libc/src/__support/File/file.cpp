@@ -613,7 +613,6 @@ FileIOResult File::read_unlocked(wchar_t *ws, size_t len) {
       uint8_t byte;
       auto read_res = read_unlocked_impl(&byte, 1);
       if (read_res.has_error()) {
-        err = true;
         return {read_count, read_res.error};
       }
       if (read_res.value == 0) { // EOF
