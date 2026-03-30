@@ -17,7 +17,7 @@
 #include "src/__support/alloc-checker.h"
 #include "src/__support/libc_errno.h" // For error macros
 #include "src/__support/macros/config.h"
-#include "src/__support/wchar/mbrtowc.h"
+#include "src/__support/wchar/character_converter.h"
 #include "src/__support/wchar/wcrtomb.h"
 #include "src/string/memory_utils/inline_memcpy.h"
 
@@ -567,48 +567,31 @@ FileIOResult File::write_unlocked(const wchar_t *ws, size_t len) {
 
   size_t written = 0;
   for (size_t i = 0; i < len; ++i) {
-    char buf[4];
-    auto result = internal::wcrtomb(buf, ws[i], &mbstate);
-    if (!result.has_value()) {
+    internal::CharacterConverter cr(&mbstate);
+    int push_err = cr.push(static_cast<char32_t>(ws[i]));
+    if (push_err != 0) {
       err = true;
-      return {written, result.error()};
+      return {written, push_err};
     }
-    size_t n = result.value();
-    auto write_res = write_unlocked_impl(buf, n);
-    if (write_res.has_error()) {
-      err = true;
-      return {written, write_res.error};
-    }
-    if (write_res.value < n) {
-      // Partial write of bytes.
-      return {written, 0};
+    while (!cr.isEmpty()) {
+      auto pop_res = cr.pop<char8_t>();
+      if (!pop_res.has_value()) {
+        err = true;
+        return {written, pop_res.error()};
+      }
+      char8_t byte = pop_res.value();
+      auto write_res = write_unlocked_impl(&byte, 1);
+      if (write_res.has_error()) {
+        err = true;
+        return {written, write_res.error};
+      }
+      if (write_res.value < 1) {
+        return {written, 0};
+      }
     }
     ++written;
   }
   return {written, 0};
-}
-
-FileIOResult File::write_wide_character_unlocked(wchar_t wc) {
-  switch (orientation) {
-  case Orientation::BYTE:
-    err = true;
-    return {0, EINVAL};
-  case Orientation::UNORIENTED:
-    orientation = Orientation::WIDE;
-    break;
-  case Orientation::WIDE:
-    break;
-  }
-
-  char buf[4];
-  auto result = internal::wcrtomb(buf, wc, &mbstate);
-  if (!result.has_value()) {
-    err = true;
-    return {0, result.error()};
-  }
-
-  size_t n = result.value();
-  return write_unlocked_impl(buf, n);
 }
 
 FileIOResult File::read_unlocked(wchar_t *ws, size_t len) {
@@ -625,62 +608,35 @@ FileIOResult File::read_unlocked(wchar_t *ws, size_t len) {
 
   size_t read_count = 0;
   for (size_t i = 0; i < len; ++i) {
-    auto res = read_wide_character_unlocked();
-    if (!res.has_value()) {
-      if (res.error() == 0) { // EOF
-        break;
+    internal::CharacterConverter cr(&mbstate);
+    while (!cr.isFull()) {
+      uint8_t byte;
+      auto read_res = read_unlocked_impl(&byte, 1);
+      if (read_res.has_error()) {
+        err = true;
+        return {read_count, read_res.error};
       }
-      err = true;
-      return {read_count, res.error()};
+      if (read_res.value == 0) { // EOF
+        if (cr.isEmpty())
+          return {read_count, 0};
+        err = true;
+        return {read_count, EILSEQ}; // Incomplete character at EOF
+      }
+      int push_err = cr.push(static_cast<char8_t>(byte));
+      if (push_err != 0) {
+        err = true;
+        return {read_count, push_err};
+      }
     }
-    ws[i] = res.value();
+    auto pop_res = cr.pop<char32_t>();
+    if (!pop_res.has_value()) {
+      err = true;
+      return {read_count, pop_res.error()};
+    }
+    ws[i] = static_cast<wchar_t>(pop_res.value());
     ++read_count;
   }
   return {read_count, 0};
-}
-
-ErrorOr<wchar_t> File::read_wide_character_unlocked() {
-  switch (orientation) {
-  case Orientation::BYTE:
-    err = true;
-    return Error(EINVAL);
-  case Orientation::UNORIENTED:
-    orientation = Orientation::WIDE;
-    break;
-  case Orientation::WIDE:
-    break;
-  }
-
-  wchar_t wc;
-  bool first_byte = true;
-  while (true) {
-    uint8_t byte;
-    FileIOResult read_result = read_unlocked_impl(&byte, 1);
-    if (read_result.has_error()) {
-      err = true;
-      return Error(read_result.error);
-    }
-    if (read_result.value == 0) { // EOF
-      if (first_byte) {
-        return Error(0); // EOF
-      }
-      err = true;
-      return Error(EILSEQ); // Incomplete character at EOF
-    }
-    char c = static_cast<char>(byte);
-    auto res = internal::mbrtowc(&wc, &c, 1, &mbstate);
-    if (!res.has_value()) {
-      err = true;
-      return Error(res.error());
-    }
-    if (res.value() == 0) { // null terminator
-      return L'\0';
-    }
-    if (res.value() != static_cast<size_t>(-2)) { // Complete character
-      return wc;
-    }
-    first_byte = false;
-  }
 }
 
 wint_t File::ungetwc_unlocked(wchar_t wc) {

@@ -239,20 +239,6 @@ public:
     return read_unlocked(ws, len);
   }
 
-  FileIOResult write_wide_character_unlocked(wchar_t wc);
-
-  FileIOResult write_wide_character(wchar_t wc) {
-    FileLock l(this);
-    return write_wide_character_unlocked(wc);
-  }
-
-  ErrorOr<wchar_t> read_wide_character_unlocked();
-
-  ErrorOr<wchar_t> read_wide_character() {
-    FileLock l(this);
-    return read_wide_character_unlocked();
-  }
-
   wint_t ungetwc_unlocked(wchar_t wc);
 
   wint_t ungetwc(wchar_t wc) {

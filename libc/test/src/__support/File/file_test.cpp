@@ -513,44 +513,13 @@ TEST(LlvmLibcFileTest, WriteSplit) {
   ASSERT_EQ(f->close(), 0);
 }
 
-TEST(LlvmLibcFileTest, WideCharIO) {
-  constexpr size_t FILE_BUFFER_SIZE = 512;
-  char file_buffer[FILE_BUFFER_SIZE];
-  StringFile *f =
-      new_string_file(file_buffer, FILE_BUFFER_SIZE, _IOFBF, false, "w+");
-
-  wchar_t wc = L'A';
-  auto write_res = f->write_wide_character(wc);
-  ASSERT_EQ(write_res.value, size_t(1));
-
-  wchar_t wc2 = L'€';
-  write_res = f->write_wide_character(wc2);
-  ASSERT_EQ(write_res.value, size_t(3));
-
-  ASSERT_EQ(f->flush(), 0);
-
-  ASSERT_EQ(f->seek(0, SEEK_SET).value(), 0);
-
-  auto read_res = f->read_wide_character();
-  ASSERT_TRUE(read_res.has_value());
-  EXPECT_EQ(static_cast<unsigned int>(read_res.value()),
-            static_cast<unsigned int>(L'A'));
-
-  read_res = f->read_wide_character();
-  ASSERT_TRUE(read_res.has_value());
-  EXPECT_EQ(static_cast<unsigned int>(read_res.value()),
-            static_cast<unsigned int>(L'€'));
-
-  ASSERT_EQ(f->close(), 0);
-}
-
 TEST(LlvmLibcFileTest, WideCharOrientation) {
   constexpr size_t FILE_BUFFER_SIZE = 512;
   char file_buffer[FILE_BUFFER_SIZE];
   StringFile *f =
       new_string_file(file_buffer, FILE_BUFFER_SIZE, _IOFBF, false, "w+");
 
-  f->write_wide_character(L'A');
+  f->write(L"A", 1);
 
   auto write_res = f->write("B", 1);
   EXPECT_EQ(write_res.value, size_t(0));
@@ -567,7 +536,7 @@ TEST(LlvmLibcFileTest, ByteCharOrientation) {
 
   f->write("A", 1);
 
-  auto write_res = f->write_wide_character(L'B');
+  auto write_res = f->write(L"B", 1);
   EXPECT_EQ(write_res.value, size_t(0));
   EXPECT_TRUE(f->error());
 
@@ -580,22 +549,23 @@ TEST(LlvmLibcFileTest, Ungetwc) {
   StringFile *f =
       new_string_file(file_buffer, FILE_BUFFER_SIZE, _IOFBF, false, "w+");
 
-  f->write_wide_character(L'A');
+  f->write(L"A", 1);
   f->flush();
   f->seek(0, SEEK_SET);
 
-  auto read_res = f->read_wide_character();
-  ASSERT_TRUE(read_res.has_value());
-  EXPECT_EQ(static_cast<unsigned int>(read_res.value()),
+  wchar_t ws_out[2];
+  auto read_res = f->read(ws_out, 1);
+  ASSERT_EQ(read_res.value, size_t(1));
+  EXPECT_EQ(static_cast<unsigned int>(ws_out[0]),
             static_cast<unsigned int>(L'A'));
 
   auto unget_res = f->ungetwc(L'B');
   EXPECT_EQ(static_cast<unsigned int>(unget_res),
             static_cast<unsigned int>(L'B'));
 
-  read_res = f->read_wide_character();
-  ASSERT_TRUE(read_res.has_value());
-  EXPECT_EQ(static_cast<unsigned int>(read_res.value()),
+  auto read_res2 = f->read(ws_out, 1);
+  ASSERT_EQ(read_res2.value, size_t(1));
+  EXPECT_EQ(static_cast<unsigned int>(ws_out[0]),
             static_cast<unsigned int>(L'B'));
 
   ASSERT_EQ(f->close(), 0);
