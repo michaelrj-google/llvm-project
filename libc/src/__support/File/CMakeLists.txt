@@ -25,11 +25,11 @@ add_object_library(
     libc.src.__support.error_or
     libc.src.__support.macros.config
     libc.src.__support.macros.properties.architectures
-    libc.src.__support.wchar.mbrtowc
     libc.src.__support.wchar.mbstate
     libc.src.__support.wchar.wcrtomb
+    libc.src.__support.wchar.character_converter
     libc.src.string.memory_utils.inline_memcpy
-    libc.src.__support.libc_errno
+    libc.hdr.errno_macros
 )
 
 add_object_library(
