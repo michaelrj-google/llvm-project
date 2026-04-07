@@ -656,6 +656,31 @@ TEST(LlvmLibcFileTest, UngetwcMultiByte) {
   ASSERT_EQ(f->close(), 0);
 }
 
+TEST(LlvmLibcFileTest, UngetwcUnbufferedMultiByte) {
+  StringFile *f = new_string_file(nullptr, 0, _IONBF, true, "w+");
+  ASSERT_FALSE(f == nullptr);
+
+  f->write(L"€", 1);
+  f->seek(0, SEEK_SET);
+
+  wchar_t ws_out[2];
+  auto read_res = f->read(ws_out, 1);
+  ASSERT_EQ(read_res.value, size_t(1));
+  EXPECT_EQ(static_cast<unsigned int>(ws_out[0]),
+            static_cast<unsigned int>(L'€'));
+
+  auto unget_res = f->ungetwc(L'¢');
+  EXPECT_EQ(static_cast<unsigned int>(unget_res),
+            static_cast<unsigned int>(L'¢'));
+
+  auto read_res2 = f->read(ws_out, 1);
+  ASSERT_EQ(read_res2.value, size_t(1));
+  EXPECT_EQ(static_cast<unsigned int>(ws_out[0]),
+            static_cast<unsigned int>(L'¢'));
+
+  ASSERT_EQ(f->close(), 0);
+}
+
 TEST(LlvmLibcFileTest, WideStringIO_Multibyte) {
   constexpr size_t FILE_BUFFER_SIZE = 100;
   char file_buffer[FILE_BUFFER_SIZE];

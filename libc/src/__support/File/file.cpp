@@ -655,6 +655,10 @@ wint_t File::ungetwc_unlocked(wchar_t wc) {
   size_t n = result.value();
 
   if (read_limit == 0) {
+    if (n > bufsize) {
+      err = true;
+      return WEOF;
+    }
     for (size_t i = 0; i < n; ++i) {
       this->buf[i] = static_cast<uint8_t>(buf[i]);
     }

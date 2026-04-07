@@ -107,8 +107,9 @@ private:
 
   // For files which are readable, we should be able to support one ungetc
   // operation even if |buf| is nullptr. So, in the constructor of File, we
-  // set |buf| to point to this buffer character.
-  uint8_t ungetc_buf;
+  // set |buf| to point to this buffer character. It needs to be at least 4
+  // bytes so we can store a widechar.
+  uint8_t ungetc_buf[4];
 
   uint8_t *buf;   // Pointer to the stream buffer for buffered streams
   size_t bufsize; // Size of the buffer pointed to by |buf|.
@@ -178,7 +179,7 @@ public:
       : platform_write(wf), platform_read(rf), platform_seek(sf),
         platform_close(cf), mutex(/*timed=*/false, /*recursive=*/false,
                                   /*robust=*/false, /*pshared=*/false),
-        ungetc_buf(0), buf(buffer), bufsize(buffer_size), bufmode(buffer_mode),
+        ungetc_buf{}, buf(buffer), bufsize(buffer_size), bufmode(buffer_mode),
         own_buf(owned), mode(modeflags), pos(0), prev_op(FileOp::NONE),
         read_limit(0), eof(false), err(false),
         orientation(Orientation::UNORIENTED), mbstate(), prev(nullptr),
@@ -371,8 +372,9 @@ private:
       // 3. If user wants _IONBF, then the buffer is ignored for writing.
       // So, all of the above cases, having a single ungetc buffer does not
       // affect the behavior experienced by the user.
-      buf = &ungetc_buf;
-      bufsize = 1;
+      buf = ungetc_buf;
+      bufsize = sizeof(ungetc_buf);
+      own_buf = false; // We shouldn't call free on |buf| when closing the file.
     }
   }
 
