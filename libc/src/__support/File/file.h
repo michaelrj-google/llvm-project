@@ -240,9 +240,9 @@ public:
     return read_unlocked(ws, len);
   }
 
-  wint_t ungetwc_unlocked(wchar_t wc);
+  wint_t ungetwc_unlocked(wint_t wc);
 
-  wint_t ungetwc(wchar_t wc) {
+  wint_t ungetwc(wint_t wc) {
     FileLock lock(this);
     return ungetwc_unlocked(wc);
   }

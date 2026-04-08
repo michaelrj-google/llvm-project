@@ -581,13 +581,10 @@ FileIOResult File::write_unlocked(const wchar_t *ws, size_t len) {
       }
       char8_t byte = pop_res.value();
       auto write_res = write_unlocked_impl(&byte, 1);
-      if (write_res.has_error()) {
-        err = true;
+      if (write_res.has_error())
         return {written, write_res.error};
-      }
-      if (write_res.value < 1) {
+      if (write_res.value < 1)
         return {written, 0};
-      }
     }
     ++written;
   }
@@ -612,9 +609,8 @@ FileIOResult File::read_unlocked(wchar_t *ws, size_t len) {
     while (!cr.isFull()) {
       uint8_t byte;
       auto read_res = read_unlocked_impl(&byte, 1);
-      if (read_res.has_error()) {
+      if (read_res.has_error())
         return {read_count, read_res.error};
-      }
       if (read_res.value == 0) { // EOF
         if (cr.isEmpty())
           return {read_count, 0};
@@ -638,41 +634,42 @@ FileIOResult File::read_unlocked(wchar_t *ws, size_t len) {
   return {read_count, 0};
 }
 
-wint_t File::ungetwc_unlocked(wchar_t wc) {
-  if (orientation == Orientation::UNORIENTED)
-    orientation = Orientation::WIDE;
-  if (orientation != Orientation::WIDE) {
+wint_t File::ungetwc_unlocked(wint_t wc) {
+  if (wc == WEOF)
+    return WEOF;
+  switch (orientation) {
+  case Orientation::BYTE:
     err = true;
     return WEOF;
+  case Orientation::UNORIENTED:
+    orientation = Orientation::WIDE;
+    break;
+  case Orientation::WIDE:
+    break;
   }
 
   char buf[4];
-  auto result = internal::wcrtomb(buf, wc, &mbstate);
-  if (!result.has_value()) {
-    err = true;
+  auto result = internal::wcrtomb(buf, static_cast<wchar_t>(wc), &mbstate);
+  if (!result.has_value())
     return WEOF;
-  }
+
   size_t n = result.value();
 
   if (read_limit == 0) {
-    if (n > bufsize) {
-      err = true;
+    if (n > bufsize)
       return WEOF;
-    }
-    for (size_t i = 0; i < n; ++i) {
+
+    for (size_t i = 0; i < n; ++i)
       this->buf[i] = static_cast<uint8_t>(buf[i]);
-    }
+
     read_limit = n;
     pos = 0;
   } else {
-    if (pos < n) {
-      err = true;
+    if (pos < n)
       return WEOF;
-    }
     pos -= n;
-    for (size_t i = 0; i < n; ++i) {
+    for (size_t i = 0; i < n; ++i)
       this->buf[pos + i] = static_cast<uint8_t>(buf[i]);
-    }
   }
   eof = false;
   err = false;

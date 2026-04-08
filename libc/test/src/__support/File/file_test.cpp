@@ -7,6 +7,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "hdr/types/size_t.h"
+#include "hdr/wchar_macros.h"
 #include "src/__support/CPP/new.h"
 #include "src/__support/File/file.h"
 #include "src/__support/alloc-checker.h"
@@ -734,6 +735,73 @@ TEST(LlvmLibcFileTest, SeekResetsMbstate) {
   EXPECT_EQ(read_res2.value, size_t(1));
   EXPECT_EQ(static_cast<unsigned int>(ws_out[0]),
             static_cast<unsigned int>(L'A'));
+
+  ASSERT_EQ(f->close(), 0);
+}
+
+TEST(LlvmLibcFileTest, ReadWideNotStopAtNewline) {
+  constexpr size_t FILE_BUFFER_SIZE = 100;
+  char file_buffer[FILE_BUFFER_SIZE];
+  StringFile *f =
+      new_string_file(file_buffer, FILE_BUFFER_SIZE, _IOFBF, false, "w+");
+  ASSERT_FALSE(f == nullptr);
+
+  const wchar_t *ws = L"Hello\nWorld!";
+  size_t len = 12;
+
+  auto write_res = f->write(ws, len);
+  ASSERT_FALSE(write_res.has_error());
+  EXPECT_EQ(write_res.value, len);
+
+  ASSERT_EQ(f->flush(), 0);
+  ASSERT_EQ(f->seek(0, SEEK_SET).value(), 0);
+
+  wchar_t read_buf[20];
+  auto read_res = f->read(read_buf, len);
+  ASSERT_FALSE(read_res.has_error());
+  // Should NOT stop at newline, so should read all 12 characters.
+  EXPECT_EQ(read_res.value, len);
+  EXPECT_EQ(static_cast<unsigned int>(read_buf[5]),
+            static_cast<unsigned int>(L'\n'));
+  EXPECT_EQ(static_cast<unsigned int>(read_buf[11]),
+            static_cast<unsigned int>(L'!'));
+
+  ASSERT_EQ(f->close(), 0);
+}
+
+TEST(LlvmLibcFileTest, UngetwcWEOF) {
+  constexpr size_t FILE_BUFFER_SIZE = 100;
+  char file_buffer[FILE_BUFFER_SIZE];
+  StringFile *f =
+      new_string_file(file_buffer, FILE_BUFFER_SIZE, _IOFBF, false, "r+");
+  ASSERT_FALSE(f == nullptr);
+
+  EXPECT_EQ(static_cast<unsigned int>(f->get_orientation()),
+            static_cast<unsigned int>(File::Orientation::UNORIENTED));
+
+  auto unget_res = f->ungetwc(WEOF);
+  EXPECT_EQ(static_cast<unsigned int>(unget_res),
+            static_cast<unsigned int>(WEOF));
+
+  EXPECT_EQ(static_cast<unsigned int>(f->get_orientation()),
+            static_cast<unsigned int>(File::Orientation::UNORIENTED));
+
+  ASSERT_EQ(f->close(), 0);
+}
+
+TEST(LlvmLibcFileTest, UngetwcErrorIndicator) {
+  constexpr size_t FILE_BUFFER_SIZE = 100;
+  char file_buffer[FILE_BUFFER_SIZE];
+  StringFile *f =
+      new_string_file(file_buffer, FILE_BUFFER_SIZE, _IOFBF, false, "w+");
+  ASSERT_FALSE(f == nullptr);
+
+  f->write("A", 1);
+
+  auto unget_res = f->ungetwc(L'B');
+  EXPECT_EQ(static_cast<unsigned int>(unget_res),
+            static_cast<unsigned int>(WEOF));
+  EXPECT_FALSE(f->error());
 
   ASSERT_EQ(f->close(), 0);
 }
