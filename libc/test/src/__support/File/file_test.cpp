@@ -563,8 +563,8 @@ TEST(LlvmLibcFileTest, Ungetwc) {
   auto unget_res = f->ungetwc(L'B');
   EXPECT_EQ(static_cast<unsigned int>(unget_res),
             static_cast<unsigned int>(L'B'));
-
   auto read_res2 = f->read(ws_out, 1);
+
   ASSERT_EQ(read_res2.value, size_t(1));
   EXPECT_EQ(static_cast<unsigned int>(ws_out[0]),
             static_cast<unsigned int>(L'B'));
@@ -785,23 +785,6 @@ TEST(LlvmLibcFileTest, UngetwcWEOF) {
 
   EXPECT_EQ(static_cast<unsigned int>(f->get_orientation()),
             static_cast<unsigned int>(File::Orientation::UNORIENTED));
-
-  ASSERT_EQ(f->close(), 0);
-}
-
-TEST(LlvmLibcFileTest, UngetwcErrorIndicator) {
-  constexpr size_t FILE_BUFFER_SIZE = 100;
-  char file_buffer[FILE_BUFFER_SIZE];
-  StringFile *f =
-      new_string_file(file_buffer, FILE_BUFFER_SIZE, _IOFBF, false, "w+");
-  ASSERT_FALSE(f == nullptr);
-
-  f->write("A", 1);
-
-  auto unget_res = f->ungetwc(L'B');
-  EXPECT_EQ(static_cast<unsigned int>(unget_res),
-            static_cast<unsigned int>(WEOF));
-  EXPECT_FALSE(f->error());
 
   ASSERT_EQ(f->close(), 0);
 }

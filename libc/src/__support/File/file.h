@@ -183,7 +183,7 @@ public:
         own_buf(owned), mode(modeflags), pos(0), prev_op(FileOp::NONE),
         read_limit(0), eof(false), err(false),
         orientation(Orientation::UNORIENTED), mbstate(), prev(nullptr),
-        next(nullptr), {
+        next(nullptr) {
     adjust_buf();
   }
 
