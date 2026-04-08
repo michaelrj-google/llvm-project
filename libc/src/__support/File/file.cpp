@@ -255,11 +255,9 @@ FileIOResult File::read_unlocked_impl(void *data, size_t len) {
 
   if (bufmode == _IONBF) { // unbuffered.
     return read_unlocked_nbf(static_cast<uint8_t *>(data), len);
-  }
-  if (bufmode == _IOFBF) { // fully buffered
+  } else if (bufmode == _IOFBF) { // fully buffered
     return read_unlocked_fbf(static_cast<uint8_t *>(data), len);
-  }
-  /*if (bufmode == _IOLBF) */ { // line buffered
+  } else /*if (bufmode == _IOLBF) */ { // line buffered
     // There is no line buffered mode for read. Use fully buffered instead.
     return read_unlocked_fbf(static_cast<uint8_t *>(data), len);
   }
